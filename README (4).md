@@ -93,21 +93,48 @@ DB_PASSWORD=inventory_pass
 ## 6️⃣ Laravel Dockerfile (Production-Ready)
 
 ```dockerfile
-FROM php:8.2-cli
+# Use PHP 8.2 (Laravel-stable)
+FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-RUN apt-get update && apt-get install -y     git curl unzip     libpng-dev libonig-dev libxml2-dev libzip-dev libicu-dev     libfreetype6-dev libjpeg62-turbo-dev libwebp-dev     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp     && docker-php-ext-install pdo_mysql mbstring gd xml zip intl
+# Install system dependencies & PHP extensions
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    zip \
+    default-mysql-client \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Enable Apache rewrite
+RUN a2enmod rewrite
+
+# Configure Apache for Laravel
+RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf \
+    && sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+
+# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Copy project
 COPY . .
 
-RUN composer install --no-interaction --no-dev --optimize-autoloader
-RUN chown -R www-data:www-data storage bootstrap/cache
+# Install dependencies (NO ignore flags)
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
-EXPOSE 8000
+# Permissions
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+EXPOSE 80
+
+CMD ["apache2-foreground"]
 ```
 
 ---
@@ -140,11 +167,68 @@ docker exec -it inventory-app php artisan storage:link
 http://<EC2-PUBLIC-IP>:8000
 ```
 
-**Default Credentials**
+## If Issues Encounter During Build Dockerfile**
+
+### The Only Correct Fix (No Shortcuts)
+
+When working with Laravel in Docker, **dependency compatibility must be handled correctly**.  
+If your `composer.lock` file was generated using an older PHP version, it **must be updated using PHP 8.2** to avoid CI/CD and production failures.
+
+This is the **same approach used in real CI/CD pipelines**.
+
+---
+
+#### 🔧 Step 1: Update Dependencies Using Docker (No Local PHP Required)
+
+Run the following command **from the project root directory**:
+
+```bash
+docker run --rm -it \
+  -v "$PWD":/app \
+  -w /app \
+  php:8.2-cli \
+  bash -c "
+    apt-get update &&
+    apt-get install -y git unzip curl libzip-dev &&
+    docker-php-ext-install zip &&
+    git config --global --add safe.directory /app &&
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer &&
+    composer update
+  "
 
 ```
-Email: admin@admin.com
-Password: password
+#### 🔄 Step 2: Rebuild Docker Image (Clean Build)
+
+After updating dependencies, rebuild the Docker image without cache:
+```bash
+
+docker build --no-cache -t inventory-laravel-app .
+
+This ensures:
+
+Fresh dependency installation
+
+No stale layers
+
+Predictable production builds
+```
+
+#### ▶️ Step 3: Run the Application Container
+
+Start the Laravel application container:
+```bash
+
+docker run -d \
+  --name inventory-app \
+  --network inventory-net \
+  -p 8000:80 \
+  inventory-laravel-app
+```
+
+The application will now be accessible at:
+```bash
+
+http://<EC2-PUBLIC-IP>:8000
 ```
 
 ---
