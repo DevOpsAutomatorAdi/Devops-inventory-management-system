@@ -5,7 +5,7 @@
 
 ## Quick Installation
 
-    git clone https://github.com/ekramasif/Inventory_Management_System.git
+    git clone https://github.com/DevOpsAutomatorAdi/Inventory_Management_System.git
 
     cd Inventory_Management_System
     
