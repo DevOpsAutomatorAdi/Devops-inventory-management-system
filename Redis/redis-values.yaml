@@ -1,0 +1,40 @@
+architecture: replication
+
+auth:
+  enabled: true
+  password: redis123
+
+master:
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: standard
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  extraFlags:
+    - "--appendonly yes"
+    - "--appendfsync everysec"
+
+replica:
+  replicaCount: 2
+
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: standard
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+

@@ -17,6 +17,14 @@ use Illuminate\Http\Request;
 | contains the "web" middleware group. Now create something great!
 |
 */
+Route::get('/session', function () {
+    session(['test_session' => 'redis_is_working']);
+    return response()->json([
+        'message' => 'Session created',
+        'session_id' => session()->getId(),
+    ]);
+});
+
 
 Route::get('/', function () {
     return view('auth.login');
